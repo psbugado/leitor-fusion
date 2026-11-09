@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Leitor QR Code e Codigo de Barras - Fusion</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    background: #0f172a;
+    color: #e2e8f0;
+    padding: 12px;
+  }
+  h1 { font-size: 18px; text-align: center; margin: 8px 0 14px; color: #38bdf8; }
+  .bloco { max-width: 480px; margin: 0 auto 14px; }
+
+  .usuario {
+    background: #1e293b; border-radius: 10px; padding: 10px 14px;
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  }
+  .usuario .rotulo { color: #94a3b8; font-size: 13px; }
+  .usuario .nome { font-weight: 700; color: #4ade80; flex: 1; word-break: break-word; }
+  .usuario input {
+    flex: 1; min-width: 160px; padding: 10px; border-radius: 8px;
+    border: 1px solid #334155; background: #0f172a; color: #e2e8f0; font-size: 15px;
+  }
+  .btn-sec {
+    padding: 10px 14px; border-radius: 8px; border: 1px solid #38bdf8;
+    background: transparent; color: #38bdf8; font-weight: 600; font-size: 14px;
+  }
+  .btn-pri {
+    padding: 10px 16px; border-radius: 8px; border: none;
+    background: #38bdf8; color: #0f172a; font-weight: 700; font-size: 14px;
+  }
+
+  #reader { width: 100%; max-width: 480px; margin: 0 auto; border-radius: 12px; overflow: hidden; }
+  .status { text-align: center; margin: 14px 0; font-size: 15px; min-height: 22px; }
+  .status.ok { color: #4ade80; }
+  .status.aviso { color: #facc15; }
+  .status.erro { color: #f87171; }
+  .contador { text-align: center; font-size: 14px; color: #94a3b8; margin-bottom: 10px; }
+
+  .manual { display: flex; gap: 8px; }
+  .btn-foto {
+    width: 100%; padding: 16px; border-radius: 10px; border: none;
+    background: #facc15; color: #0f172a; font-weight: 800; font-size: 17px;
+  }
+  .btn-foto:disabled { opacity: .6; }
+  .manual input {
+    flex: 1; padding: 10px; border-radius: 8px; border: 1px solid #334155;
+    background: #1e293b; color: #e2e8f0; font-size: 14px;
+  }
+
+  .acoes { display: flex; flex-wrap: wrap; gap: 8px; }
+  .acoes button {
+    flex: 1 1 auto; min-width: 140px; padding: 12px 8px; border-radius: 8px;
+    border: none; font-weight: 700; font-size: 14px;
+  }
+  .acoes button:disabled { opacity: .5; }
+  .btn-excel { background: #22c55e; color: #0f172a; }
+  .btn-word  { background: #38bdf8; color: #0f172a; }
+  .btn-pdf   { background: #a78bfa; color: #0f172a; }
+  .btn-limpar{ background: #ef4444; color: #fff; }
+
+  .lista { background: #1e293b; border-radius: 10px; padding: 10px 14px; }
+  .lista h2 { font-size: 14px; color: #94a3b8; margin: 4px 0 8px; font-weight: 600; }
+  .item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 0; border-bottom: 1px solid #334155; font-size: 13px;
+  }
+  .item:last-child { border-bottom: none; }
+  .item .codigo { color: #e2e8f0; word-break: break-all; flex: 1; }
+  .item .hora { color: #64748b; white-space: nowrap; }
+  .item .remover {
+    border: none; background: transparent; color: #f87171; font-size: 16px; padding: 2px 6px;
+  }
+  .vazio { color: #64748b; font-size: 13px; padding: 6px 0; }
+
+  .oculto { display: none !important; }
+
+  .modal-fundo {
+    position: fixed; inset: 0; background: rgba(0,0,0,.6);
+    display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 50;
+  }
+  .modal {
+    background: #1e293b; border-radius: 12px; padding: 18px; max-width: 380px; width: 100%;
+  }
+  .modal p { margin: 0 0 14px; font-size: 14px; line-height: 1.45; }
+  .modal input {
+    width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #334155;
+    background: #0f172a; color: #e2e8f0; font-size: 15px; margin-bottom: 14px;
+  }
+  .modal .botoes { display: flex; gap: 8px; justify-content: flex-end; }
+</style>
+</head>
+<body>
+
+  <h1>📷 Leitor de QR Code e Codigo de Barras</h1>
+
+  <!-- Identificacao do usuario: cada um tem sua propria lista -->
+  <div class="bloco usuario" id="boxEntrar">
+    <input type="text" id="campoUsuario" placeholder="Seu nome (ex.: Joao Silva)" autocomplete="name">
+    <button class="btn-pri" onclick="entrar()">Entrar</button>
+  </div>
+  <div class="bloco usuario oculto" id="boxLogado">
+    <span class="rotulo">Usuario:</span>
+    <span class="nome" id="nomeUsuario"></span>
+    <button class="btn-sec" onclick="trocarUsuario()">Trocar</button>
+  </div>
+
+  <div id="areaLeitor" class="oculto">
+    <div id="reader"></div>
+
+    <div class="status" id="status">Aponte a camera para o QR Code ou codigo de barras</div>
+    <div class="contador" id="contador">Codigos salvos: 0</div>
+
+    <!-- Leitura por foto: abre a camera nativa do celular (funciona mesmo quando a camera ao vivo e bloqueada) -->
+    <div class="bloco">
+      <button class="btn-foto" onclick="tirarFoto()">📸 Fotografar codigo</button>
+      <input type="file" id="arquivoFoto" accept="image/*" capture="environment" class="oculto">
+      <div id="leitorArquivo" class="oculto"></div>
+    </div>
+
+    <div class="bloco manual">
+      <input type="text" id="entradaManual" placeholder="Ou digite o codigo manualmente" inputmode="numeric">
+      <button class="btn-pri" onclick="enviarManual()">Salvar</button>
+    </div>
+
+    <div class="bloco acoes">
+      <button class="btn-excel" id="btnExcel" onclick="exportarExcel()">⬇️ Exportar Excel (.xlsx)</button>
+      <button class="btn-word"  id="btnWord"  onclick="exportarTermo('docx')">📄 Termo (Word)</button>
+      <button class="btn-pdf"   id="btnPdf"   onclick="exportarTermo('pdf')">📑 Termo (PDF)</button>
+      <button class="btn-limpar" onclick="pedirLimpeza()">🗑️ Limpar meus registros</button>
+    </div>
+
+    <div class="bloco lista">
+      <h2>Ultimos codigos escaneados</h2>
+      <div id="listaItens"><div class="vazio">Nenhum codigo ainda.</div></div>
+    </div>
+  </div>
+
+  <!-- Modal de confirmacao (substitui confirm(), que pode ser bloqueado no Apps Script) -->
+  <div class="modal-fundo oculto" id="modal">
+    <div class="modal">
+      <p id="modalTexto"></p>
+      <input type="password" id="modalPin" class="oculto" placeholder="PIN" inputmode="numeric">
+      <div class="botoes">
+        <button class="btn-sec" onclick="fecharModal()">Cancelar</button>
+        <button class="btn-pri" id="modalOk">Confirmar</button>
+      </div>
+    </div>
+  </div>
+
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script>
+// Endereco do App da Web do Apps Script (a planilha continua sendo o "banco de dados")
+const API_URL = "https://script.google.com/macros/s/AKfycbzypzpXHMV1yqs3k2w2TTPT-EAfeYxCCfKzs8xFMa15vddS89N_eWWeTZ1oMwE32-vMpg/exec";
+const CONFIG = {
+  usuarioUrl: (new URLSearchParams(location.search).get("usuario") || "").replace(/\s+/g, " ").trim(),
+  exigePin: false
+};
+const CHAVE_USUARIO = "leitorQr.usuario";
+
+let usuario = "";
+let scanner = null;
+let ultimoCodigo = null;
+let ultimoTempo = 0;
+
+// ---------------- utilidades ----------------
+function definirStatus(texto, tipo) {
+  const el = document.getElementById("status");
+  el.textContent = texto;
+  el.className = "status " + (tipo || "");
+}
+
+function vibrar(ms) { if (navigator.vibrate) navigator.vibrate(ms || 80); }
+
+let contextoAudio = null;
+function bipar(freq) {
+  try {
+    contextoAudio = contextoAudio || new (window.AudioContext || window.webkitAudioContext)();
+    const osc = contextoAudio.createOscillator();
+    const ganho = contextoAudio.createGain();
+    osc.type = "sine";
+    osc.frequency.value = freq || 1500;
+    ganho.gain.value = 0.15;
+    osc.connect(ganho);
+    ganho.connect(contextoAudio.destination);
+    osc.start();
+    osc.stop(contextoAudio.currentTime + 0.1);
+  } catch (e) {}
+}
+
+function lerArmazenado() { try { return localStorage.getItem(CHAVE_USUARIO) || ""; } catch (e) { return ""; } }
+function gravarArmazenado(v) { try { v ? localStorage.setItem(CHAVE_USUARIO, v) : localStorage.removeItem(CHAVE_USUARIO); } catch (e) {} }
+
+// chama uma funcao do Code.gs e devolve uma Promise
+// (versao externa: conversa com o Apps Script pela API JSON do doPost)
+async function servidor(nomeFuncao) {
+  const args = Array.prototype.slice.call(arguments, 1);
+  let resp;
+  try {
+    // corpo como texto simples = sem "preflight" CORS
+    resp = await fetch(API_URL, {
+      method: "POST",
+      body: JSON.stringify({ fn: nomeFuncao, args: args }),
+      redirect: "follow"
+    });
+  } catch (e) {
+    throw new Error("Sem conexao com o servidor. Verifique a internet.");
+  }
+  let json;
+  try { json = await resp.json(); } catch (e) { throw new Error("Resposta invalida do servidor (" + resp.status + ")."); }
+  if (!json.ok) throw new Error(json.erro || "Erro no servidor");
+  return json.dados;
+}
+
+function mensagemErro(e) {
+  return (e && e.message) ? e.message.replace(/^Exception:\s*/, "") : String(e);
+}
+
+// ---------------- usuario ----------------
+function entrar() {
+  const nome = document.getElementById("campoUsuario").value.replace(/\s+/g, " ").trim();
+  if (nome.length < 2) {
+    document.getElementById("campoUsuario").focus();
+    return;
+  }
+  definirUsuario(nome);
+}
+
+function definirUsuario(nome) {
+  usuario = nome;
+  gravarArmazenado(nome);
+  document.getElementById("nomeUsuario").textContent = nome;
+  document.getElementById("boxEntrar").classList.add("oculto");
+  document.getElementById("boxLogado").classList.remove("oculto");
+  document.getElementById("areaLeitor").classList.remove("oculto");
+  iniciarScanner();
+  atualizarLista();
+}
+
+function trocarUsuario() {
+  usuario = "";
+  gravarArmazenado("");
+  document.getElementById("campoUsuario").value = "";
+  document.getElementById("boxLogado").classList.add("oculto");
+  document.getElementById("boxEntrar").classList.remove("oculto");
+  document.getElementById("areaLeitor").classList.add("oculto");
+  pararScanner();
+  document.getElementById("campoUsuario").focus();
+}
+
+document.getElementById("campoUsuario").addEventListener("keydown", function (e) {
+  if (e.key === "Enter") entrar();
+});
+
+// ---------------- leitura ----------------
+async function enviarCodigo(codigo) {
+  if (!usuario) return;
+  definirStatus("Salvando " + codigo + "...", "");
+  try {
+    const r = await servidor("salvarCodigo", usuario, codigo);
+    if (r.status === "duplicado") {
+      vibrar([60, 60, 60]);
+      bipar(600);
+      definirStatus("Ja estava na lista: " + codigo, "aviso");
+    } else {
+      vibrar();
+      bipar();
+      definirStatus("Salvo: " + codigo, "ok");
+    }
+    renderizarLista(r.lista);
+  } catch (e) {
+    definirStatus("Erro ao salvar: " + mensagemErro(e), "erro");
+  }
+}
+
+function onScanSuccess(textoDecodificado) {
+  const agora = Date.now();
+  // evita salvar o mesmo codigo repetido em menos de 2 segundos
+  if (textoDecodificado === ultimoCodigo && (agora - ultimoTempo) < 2000) return;
+  ultimoCodigo = textoDecodificado;
+  ultimoTempo = agora;
+  enviarCodigo(textoDecodificado.trim());
+}
+
+function onScanFailure() { /* silencioso */ }
+
+function enviarManual() {
+  const campo = document.getElementById("entradaManual");
+  const valor = campo.value.trim();
+  if (valor) {
+    enviarCodigo(valor);
+    campo.value = "";
+  }
+}
+
+document.getElementById("entradaManual").addEventListener("keydown", function (e) {
+  if (e.key === "Enter") enviarManual();
+});
+
+function formatosSuportados() {
+  // QR Code + codigos de barras mais usados em etiquetas de equipamentos
+  const F = Html5QrcodeSupportedFormats;
+  return [F.QR_CODE, F.DATA_MATRIX, F.CODE_128, F.CODE_39, F.CODE_93,
+          F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E, F.ITF, F.CODABAR];
+}
+
+// a pagina pode estar dentro de um quadro (iframe) que nao tem permissao de camera
+function cameraAoVivoPermitida() {
+  try {
+    if (document.featurePolicy && document.featurePolicy.allowsFeature) {
+      return document.featurePolicy.allowsFeature("camera");
+    }
+  } catch (e) {}
+  return true;
+}
+
+function iniciarScanner() {
+  if (scanner) return;
+  if (typeof Html5QrcodeScanner === "undefined") {
+    definirStatus("Nao foi possivel carregar o leitor. Verifique a internet e recarregue.", "erro");
+    return;
+  }
+  if (!cameraAoVivoPermitida()) {
+    document.getElementById("reader").classList.add("oculto");
+    definirStatus("Toque em \"Fotografar codigo\" para ler QR Code ou codigo de barras.", "");
+    return;
+  }
+  const config = {
+    fps: 20,
+    // caixa mais larga que alta: serve para QR Code e para codigo de barras
+    qrbox: function (larguraVisor, alturaVisor) {
+      const lado = Math.min(larguraVisor, alturaVisor);
+      return { width: Math.floor(lado * 0.9), height: Math.floor(lado * 0.6) };
+    },
+    aspectRatio: 1.0,
+    rememberLastUsedCamera: true,
+    formatsToSupport: formatosSuportados(),
+    experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+    videoConstraints: {
+      facingMode: "environment",
+      width: { ideal: 1280 },
+      height: { ideal: 720 },
+      advanced: [{ focusMode: "continuous" }]
+    },
+    showTorchButtonIfSupported: true
+  };
+  scanner = new Html5QrcodeScanner("reader", config, false);
+  scanner.render(onScanSuccess, onScanFailure);
+}
+
+// ---------------- leitura por foto ----------------
+let leitorFoto = null;
+function tirarFoto() {
+  const campo = document.getElementById("arquivoFoto");
+  campo.value = "";
+  campo.click();
+}
+
+document.getElementById("arquivoFoto").addEventListener("change", async function () {
+  const arquivo = this.files && this.files[0];
+  if (!arquivo) return;
+  definirStatus("Lendo a foto...", "");
+  try {
+    leitorFoto = leitorFoto || new Html5Qrcode("leitorArquivo", {
+      formatsToSupport: formatosSuportados(),
+      experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+      verbose: false
+    });
+    const texto = await leitorFoto.scanFile(arquivo, false);
+    enviarCodigo(String(texto).trim());
+  } catch (e) {
+    vibrar([60, 60, 60]);
+    definirStatus("Nao achei codigo na foto. Chegue mais perto, com boa luz e o codigo reto, e tente de novo.", "erro");
+  }
+});
+
+function pararScanner() {
+  if (!scanner) return;
+  try { scanner.clear(); } catch (e) {}
+  scanner = null;
+}
+
+// ---------------- lista ----------------
+async function atualizarLista() {
+  if (!usuario) return;
+  try {
+    renderizarLista(await servidor("obterLista", usuario));
+  } catch (e) {
+    definirStatus("Falha ao carregar a lista: " + mensagemErro(e), "erro");
+  }
+}
+
+function renderizarLista(dados) {
+  document.getElementById("contador").textContent = "Codigos salvos: " + dados.total;
+  const container = document.getElementById("listaItens");
+  container.innerHTML = "";
+  if (!dados.ultimos.length) {
+    container.innerHTML = '<div class="vazio">Nenhum codigo ainda.</div>';
+    return;
+  }
+  dados.ultimos.forEach(function (linha) {
+    const div = document.createElement("div");
+    div.className = "item";
+
+    const cod = document.createElement("span");
+    cod.className = "codigo";
+    cod.textContent = linha[1];
+
+    const hora = document.createElement("span");
+    hora.className = "hora";
+    hora.textContent = linha[0];
+
+    const btn = document.createElement("button");
+    btn.className = "remover";
+    btn.title = "Remover este codigo";
+    btn.textContent = "✕";
+    btn.onclick = function () { pedirRemocao(linha[1]); };
+
+    div.appendChild(cod);
+    div.appendChild(hora);
+    div.appendChild(btn);
+    container.appendChild(div);
+  });
+}
+
+function pedirRemocao(codigo) {
+  abrirModal("Remover o codigo " + codigo + " da sua lista?", false, async function () {
+    try {
+      renderizarLista(await servidor("removerCodigo", usuario, codigo));
+      definirStatus("Removido: " + codigo, "ok");
+    } catch (e) {
+      definirStatus("Erro ao remover: " + mensagemErro(e), "erro");
+    }
+  });
+}
+
+function pedirLimpeza() {
+  abrirModal(
+    "Limpar TODOS os seus registros (" + usuario + ")?\n\n" +
+    "Os codigos vao para a aba Backup da planilha e sua lista sera zerada. " +
+    "As listas dos outros usuarios nao sao afetadas.",
+    CONFIG.exigePin,
+    async function (pin) {
+      try {
+        const r = await servidor("limparRegistros", usuario, pin || "");
+        definirStatus("Registros limpos (" + r.total_removido + " codigos). Pronto para um novo registro.", "ok");
+        atualizarLista();
+      } catch (e) {
+        definirStatus("Erro ao limpar: " + mensagemErro(e), "erro");
+      }
+    }
+  );
+}
+
+// ---------------- exportacoes ----------------
+function baixarArquivo(arq) {
+  const binario = atob(arq.base64);
+  const bytes = new Uint8Array(binario.length);
+  for (let i = 0; i < binario.length; i++) bytes[i] = binario.charCodeAt(i);
+  const blob = new Blob([bytes], { type: arq.mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = arq.nome;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(function () { URL.revokeObjectURL(url); a.remove(); }, 4000);
+}
+
+async function exportar(botaoId, textoEspera, funcao, args) {
+  const btn = document.getElementById(botaoId);
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = textoEspera;
+  definirStatus("Gerando arquivo, aguarde...", "");
+  try {
+    const arq = await servidor.apply(null, [funcao].concat(args));
+    baixarArquivo(arq);
+    definirStatus("Arquivo gerado: " + arq.nome, "ok");
+  } catch (e) {
+    definirStatus("Erro ao gerar: " + mensagemErro(e), "erro");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = original;
+  }
+}
+
+function exportarExcel() {
+  exportar("btnExcel", "Gerando...", "exportarExcel", [usuario]);
+}
+
+function exportarTermo(formato) {
+  exportar(formato === "pdf" ? "btnPdf" : "btnWord", "Gerando...", "exportarTermo", [usuario, formato]);
+}
+
+// ---------------- modal ----------------
+let acaoModal = null;
+function abrirModal(texto, pedirPin, acao) {
+  document.getElementById("modalTexto").innerText = texto;
+  const pin = document.getElementById("modalPin");
+  pin.value = "";
+  pin.classList.toggle("oculto", !pedirPin);
+  acaoModal = acao;
+  document.getElementById("modal").classList.remove("oculto");
+  if (pedirPin) pin.focus();
+}
+function fecharModal() {
+  document.getElementById("modal").classList.add("oculto");
+  acaoModal = null;
+}
+document.getElementById("modalOk").onclick = function () {
+  const acao = acaoModal;
+  const pin = document.getElementById("modalPin").value;
+  fecharModal();
+  if (acao) acao(pin);
+};
+
+// ---------------- inicio ----------------
+// busca se o PIN de limpeza esta ativo
+servidor("obterConfig").then(function (c) { CONFIG.exigePin = !!c.exigePin; }).catch(function () {});
+
+(function iniciar() {
+  const inicial = CONFIG.usuarioUrl || lerArmazenado();
+  if (inicial) definirUsuario(inicial);
+  else document.getElementById("campoUsuario").focus();
+})();
+</script>
+
+</body>
+</html>
